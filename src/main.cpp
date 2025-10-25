@@ -21,7 +21,7 @@ HardwareSerial& bleSerial = BLE_SERIAL;
 
 void setup()
 {
-    Serial.begin(9600);
+    Serial.begin(SERIAL_BAUDRATE);
     bleSerial.begin(9600);
     initMotor();
     initSensor();
@@ -31,6 +31,8 @@ void setup()
 void loop()
 {
     loopUtilsControl();
+
+#if defined(USE_ULTRASONIC_SENSOR)
     // Check distance sensor
     int distance = ultraGetDistance();
     if (distance < DISABLE_RUN_CM)
@@ -51,6 +53,8 @@ void loop()
             setLedColorBlink(GREEN, OFF);
         }
     }
+
+#endif // USE_ULTRASONIC_SENSOR
 
     // get speed from joystick
     int joySpeedL = getJoySpeedL();

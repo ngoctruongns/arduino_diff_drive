@@ -3,10 +3,21 @@
 
 #include <Arduino.h>
 
+/* Device configuration */
+
+// If you want to enable a feature, uncomment the corresponding line
+// #define USE_ULTRASONIC_SENSOR    // Use ultrasonic sensor HC-SR04
+#define USE_LED_STRIP            // Use LED strip WS2812B
+
+
 /* Define type */
 typedef unsigned char UINT8;
 typedef unsigned int UINT16;
 typedef unsigned long UINT32;
+
+/* Define print debug */
+#define PRINT Serial.print
+#define PRINTLN Serial.println
 
 /* Pin define */
 
@@ -36,6 +47,8 @@ typedef unsigned long UINT32;
 
 /* Communication */
 #define BLE_SERIAL          Serial3
+#define BLE_BAUDRATE        9600
+#define SERIAL_BAUDRATE     19200
 
 /* Joystick */
 #define JOYSTICK_MID_X  127       // Giá trị trung bình của joystick trục X
