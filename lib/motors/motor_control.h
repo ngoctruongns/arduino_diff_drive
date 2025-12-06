@@ -1,8 +1,8 @@
-
 #ifndef MOTOR_CONTROL_H
 #define MOTOR_CONTROL_H
 
 #include "config.h"
+#include "pid_controller.h"
 
 // Motor define
 enum
@@ -30,6 +30,11 @@ private:
     uint8_t currentPwm;     // 0 -> PWM_MAX
     uint8_t currentDir;     // Stop, Forward, Backward
 
+    // PID control
+    PIDController* pidController;
+    double targetSpeed;     // Target speed (e.g., RPM or m/s)
+    double measuredSpeed;   // Measured speed from encoder
+    boolean pidEnabled;
 
 public:
     MotorControl(uint8_t ena, uint8_t in1, uint8_t in2, bool flip);
@@ -39,59 +44,30 @@ public:
     void setPwm(uint8_t pwmVal);
     void setPwm(uint8_t pwmVal, uint8_t dir);
 
-    uint8_t getPwm() const;       // get current PWM value
+    // PID methods
+    void configPID(double Kp, double Ki, double Kd);
+    void enablePID(bool enable);
+    void setTargetSpeed(double speed);
+    void updateMeasuredSpeed(double speed);
+    void computePID();
+
+    uint8_t getPwm() const;
+    double getTargetSpeed() const { return targetSpeed; }
+    double getMeasuredSpeed() const { return measuredSpeed; }
+    boolean isPIDEnabled() const { return pidEnabled; }
 
 private:
     void setPwmDirect(uint8_t speed);
     void setDirDirect(bool in1, bool in2, bool flip);
-
-
 };
 
 /* Function prototype */
 
 void initMotor(void);
 void controlMotor(uint8_t name, uint8_t pwm, uint8_t dir);
+void controlMotorPID(uint8_t name, double targetSpeed);
 void stopMotor(void);
+void updateMotorSpeeds(void);
+void computeMotorPID(void);
 
 #endif // MOTOR_CONTROL_H
-
-// class MotorControl1 {
-//     private:
-//         uint8_t enaPin;
-//         uint8_t in1Pin;
-//         uint8_t in2Pin;
-
-//         PID* pidController;
-//         double pidInput;
-//         double pidOutput;
-//         double pidSetpoint;
-
-//         int currentPwm;
-//         bool pidEnabled;
-
-//     public:
-
-//         MotorControl(uint8_t ena, uint8_t in1, uint8_t in2);
-//         ~MotorControl();
-
-//         void configPID(double Kp, double Ki, double Kd);
-//         void enablePID();
-//         void disablePID();
-
-//         void updateSpeed(float measuredSpeed);
-//         void runPID();
-
-//         void forward(int speed);
-//         void backward(int speed);
-//         void stop();
-
-//         void setTargetSpeed(float targetSpeed);
-//         int getCurrentPWM() const;
-//         double getTargetSpeed() const;
-//         double getCurrentSpeed() const;
-
-//     private:
-//         void setSpeedDirect(int speed);
-//         void setDirection(bool in1, bool in2);
-//     };

@@ -1,9 +1,10 @@
 #include "motor_control.h"
 #include "sensor.h"
 #include "utils.h"
+#include "velocity_control.h"
+#include "process_data_packet.h"
 
 // Global variable
-UINT8 ctlCommand;
 UINT32 previousMillis;
 
 int disableRun = 0;
@@ -16,13 +17,56 @@ const int pwmStep = (PWM_MAX - PWM_MIN) / PWM_STEP_NUM;
 
 boolean joystickControl = false;
 
+uint8_t rx_buffer[BUFFER_SIZE] = {0};
+uint8_t tx_buffer[BUFFER_SIZE] = {0};
+
+// Send encoder data every 100ms
+unsigned long last_send_time = 0;
+const unsigned long send_interval = 500; // milliseconds
+
 // Serial for bluetooth
 HardwareSerial& bleSerial = BLE_SERIAL;
 
+/******************  Function body ******************/
+
+void encoderSend(int32_t left_enc, int32_t right_enc)
+{
+    WheelEncType enc_data;
+    enc_data.type = WHEEL_ENC_COMMAND;
+    enc_data.left_enc = left_enc;
+    enc_data.right_enc = right_enc;
+    uint8_t data_len = sizeof(WheelEncType);
+
+    // Prepare data package
+    uint8_t tx_len = encoderAllPackage((uint8_t *)&enc_data, data_len, tx_buffer);
+
+    if (tx_len > 0) {
+        // Send data via Serial
+        Serial.write(tx_buffer, tx_len);
+        Serial.println("Encoder send");
+    }
+}
+
+void decoderCmdVel(uint8_t *buff, uint8_t len)
+{
+    CmdVelType cmd_vel;
+    memcpy(&cmd_vel, buff, len);
+    int left_rpm  = cmd_vel.left_rpm;
+    int right_rpm = cmd_vel.right_rpm;
+
+    // Print rpm value
+    // printf("Received: L= %d, R= %d\n", left_rpm, right_rpm);
+    Serial.print("L= ");
+    Serial.print(left_rpm);
+    Serial.print(", R= ");
+    Serial.println(right_rpm);
+}
+
+/******************  Main program ******************/
 void setup()
 {
     Serial.begin(SERIAL_BAUDRATE);
-    bleSerial.begin(9600);
+    bleSerial.begin(BLE_BAUDRATE);
     initMotor();
     initSensor();
     initUtils();
@@ -80,9 +124,9 @@ void loop()
             speedR = - joySpeedR;
             dirR = BACKWARD;
         }
-        Serial.print(joySpeedL);
-        Serial.print(" <-> ");
-        Serial.println(joySpeedR);
+        // Serial.print(joySpeedL);
+        // Serial.print(" <-> ");
+        // Serial.println(joySpeedR);
     } else {
         if (joystickControl) {
             joystickControl = false;
@@ -91,82 +135,17 @@ void loop()
         }
     }
 
-    // check if data has been sent from the computer:
-    if (bleSerial.available())
-    {
-        // read the most recent byte (which will be from 0 to PWM_MAX):
-        ctlCommand = bleSerial.read();   // doc gia tri nhan
-        previousMillis = millis(); // dem thoi gian luc hien tai
-        bleSerial.print("OK");        //  Gửi xác nhận đã nhận được dữ liệu
-    }
 
-    // xu ly khi co coi
-    if (ctlCommand == 'C')
-    {
-        setBuzzerOnTime(200); // bat coi
-    }
-    if (ctlCommand == 'D')
-    {
-
-        setBuzzer(LOW); // tat coi
-    }
-
-    // Xe chay tien
-    if ((ctlCommand == 'T') && (disableRun == 0))
-    {
-        // Serial.println("Tien");
-        digitalWrite(LED_BUILTIN, HIGH);
-        speedLevel = bleSerial.parseInt();
-        speedL = PWM_MIN + speedLevel * pwmStep;
-        speedR = PWM_MIN + speedLevel * pwmStep;
-        dirL = FORWARD;
-        dirR = FORWARD;
-    }
-
-    if ((ctlCommand == 'L') && (disableRun == 0))
-    {
-        // Serial.println("Trai");
-        digitalWrite(LED_BUILTIN, HIGH);
-        speedLevel = bleSerial.parseInt();
-        speedL = 0;
-        speedR = PWM_MIN + speedLevel * pwmStep;
-        dirL = FORWARD;
-        dirR = FORWARD;
-    }
-    if ((ctlCommand == 'R') && (disableRun == 0))
-    {
-        // Serial.println("Phai");
-        digitalWrite(LED_BUILTIN, HIGH);
-        speedLevel = bleSerial.parseInt();
-        speedL = PWM_MIN + speedLevel * pwmStep;
-        speedR = 0;
-        dirL = FORWARD;
-        dirR = FORWARD;
-    }
-    if (ctlCommand == 'B')
-    {
-        // Serial.println("Lui");
-        digitalWrite(LED_BUILTIN, HIGH);
-        speedLevel = bleSerial.parseInt();
-        speedL = PWM_MIN + speedLevel * pwmStep;
-        speedR = PWM_MIN + speedLevel * pwmStep;
-        dirL = BACKWARD;
-        dirR = BACKWARD;
-    }
-
-
-
-    if (disableRun == 0 || (dirL == BACKWARD && dirR == BACKWARD)) {
+    if (disableRun == 0 || dirL == BACKWARD || dirR == BACKWARD) {
         controlMotor(MOTOR_L, speedL, dirL);
         controlMotor(MOTOR_R, speedR, dirR);
     }
 
     if ((millis() - previousMillis) >= CMD_TIME_OVER) {
-        ctlCommand = 'S';         // xoa du lieu
+        joystickControl = false;
     }
 
-    if (ctlCommand == 'S' && joystickControl == false) {
-        //bleSerial.println("Dung");
+    if (joystickControl == false) {
         digitalWrite(LED_BUILTIN, LOW);
         stopMotor();
     }

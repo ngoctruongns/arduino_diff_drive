@@ -48,7 +48,7 @@ typedef unsigned long UINT32;
 /* Communication */
 #define BLE_SERIAL          Serial3
 #define BLE_BAUDRATE        9600
-#define SERIAL_BAUDRATE     19200
+#define SERIAL_BAUDRATE     115200
 
 /* Joystick */
 #define JOYSTICK_MID_X  127       // Giá trị trung bình của joystick trục X
