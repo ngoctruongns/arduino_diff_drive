@@ -137,13 +137,8 @@ void loop()
             setPwmMotor(MOTOR_R, speedR, dirR);
         }
 
-        delay(20);
-    } else {
-        speedL = 0;
-        speedR = 0;
-        digitalWrite(LED_BUILTIN, LOW);
 
-        if (isPidControl) {
+    } else if (isPidControl) {
             UINT32 currentMillis = millis();
             if (currentMillis - lastPidTimeOutMs >= PID_CONTROL_TIMEOUT) {
                 lastPidTimeOutMs = currentMillis;
@@ -157,6 +152,15 @@ void loop()
                 lastPidSampleMs = currentMillis;
                 controlMotorPIDLoop();
             }
-        }
+
+    } else {
+        // No control, stop motors
+        // speedL = 0;
+        // speedR = 0;
+        // setPwmMotor(MOTOR_L, speedL, dirL);
+        // setPwmMotor(MOTOR_R, speedR, dirR);
+        stopMotor();
+        digitalWrite(LED_BUILTIN, LOW);
     }
+    delay(20);
 }
