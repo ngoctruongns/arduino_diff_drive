@@ -1,13 +1,20 @@
 #include "pid_controller.h"
 
-PIDController::PIDController(double Kp, double Ki, double Kd)
-    : kp(Kp), ki(Ki), kd(Kd), setpoint(0), input(0), output(0),
-      prevError(0), integral(0), lastTime(0), outMin(0), outMax(255)
+PIDController::PIDController()
+    : kp(1.0), ki(0), kd(0), setpoint(0), input(0), output(0),
+      prevError(0), integral(0), lastTime(0), outMin(-255), outMax(255)
 {
 }
 
 PIDController::~PIDController()
 {
+}
+
+void PIDController::setPidParams(double Kp, double Ki, double Kd)
+{
+    kp = Kp;
+    ki = Ki;
+    kd = Kd;
 }
 
 void PIDController::setSetpoint(double target)

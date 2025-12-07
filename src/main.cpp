@@ -5,7 +5,8 @@
 #include "process_data_packet.h"
 
 // Global variable
-UINT32 previousMillis;
+static UINT32 lastPidSampleMs;
+static UINT32 lastPidTimeOutMs;
 
 int disableRun = 0;
 int speedL = 0;      // toc do dong co trai
@@ -15,7 +16,7 @@ int dirR = 0;      // toc do dong co phai
 int speedLevel = 0;
 const int pwmStep = (PWM_MAX - PWM_MIN) / PWM_STEP_NUM;
 
-boolean joystickControl = false;
+boolean isPidControl = false;
 
 uint8_t rx_buffer[BUFFER_SIZE] = {0};
 uint8_t tx_buffer[BUFFER_SIZE] = {0};
@@ -70,6 +71,10 @@ void setup()
     initMotor();
     initSensor();
     initUtils();
+
+    // update last times
+    lastPidSampleMs = millis();
+    lastPidTimeOutMs = millis();
 }
 
 void loop()
@@ -79,20 +84,15 @@ void loop()
 #if defined(USE_ULTRASONIC_SENSOR)
     // Check distance sensor
     int distance = ultraGetDistance();
-    if (distance < DISABLE_RUN_CM)
-    {
-        if (disableRun == 0)
-        {
+    if (distance < DISABLE_RUN_CM) {
+        if (disableRun == 0) {
             disableRun = 1;
             setLedColorBlink(RED, ON);
             setBuzzerOnTime(100);
         }
         Serial.println(distance);
-    }
-    else
-    {
-        if (disableRun == 1)
-        {
+    } else {
+        if (disableRun == 1) {
             disableRun = 0;
             setLedColorBlink(GREEN, OFF);
         }
@@ -100,55 +100,63 @@ void loop()
 
 #endif // USE_ULTRASONIC_SENSOR
 
-    // get speed from joystick
-    int joySpeedL = getJoySpeedL();
-    int joySpeedR = getJoySpeedR();
-    if (joySpeedL != 0 || joySpeedR != 0)
-    {
-        previousMillis = millis();
-        joystickControl = true;
-        joySpeedL = constrain(joySpeedL, -PWM_MAX, PWM_MAX);
-        joySpeedR = constrain(joySpeedR, -PWM_MAX, PWM_MAX);
-        if ( joySpeedL > 0) {
+    // Priority for Joystick control over PID
+    if (getIsJoystickControl()) {
+        if (isPidControl) {
+            isPidControl = false;
+            setPidControlEnabled(false);
+            Serial.println("Joystick control, stop PID");
+        }
+
+        int joySpeedL = getJoySpeedL();
+        int joySpeedR = getJoySpeedR();
+
+        if (joySpeedL > 0) {
             speedL = joySpeedL;
             dirL = FORWARD;
         } else {
-            speedL = - joySpeedL;
+            speedL = -joySpeedL;
             dirL = BACKWARD;
         }
 
-        if ( joySpeedR > 0) {
+        if (joySpeedR > 0) {
             speedR = joySpeedR;
             dirR = FORWARD;
         } else {
-            speedR = - joySpeedR;
+            speedR = -joySpeedR;
             dirR = BACKWARD;
         }
-        // Serial.print(joySpeedL);
-        // Serial.print(" <-> ");
-        // Serial.println(joySpeedR);
+
+        digitalWrite(LED_BUILTIN, HIGH);
+        Serial.print(joySpeedL);
+        Serial.print(" <-> ");
+        Serial.println(joySpeedR);
+
+        if (disableRun == 0 || dirL == BACKWARD || dirR == BACKWARD) {
+            setPwmMotor(MOTOR_L, speedL, dirL);
+            setPwmMotor(MOTOR_R, speedR, dirR);
+        }
+
+        delay(20);
     } else {
-        if (joystickControl) {
-            joystickControl = false;
-            speedL = 0;
-            speedR = 0;
+        speedL = 0;
+        speedR = 0;
+        digitalWrite(LED_BUILTIN, LOW);
+
+        if (isPidControl) {
+            UINT32 currentMillis = millis();
+            if (currentMillis - lastPidTimeOutMs >= PID_CONTROL_TIMEOUT) {
+                lastPidTimeOutMs = currentMillis;
+                // Nếu quá thời gian không nhận lệnh điều khiển, tắt PID
+                isPidControl = false;
+                setPidControlEnabled(false);
+                Serial.println("PID control timeout, stop PID");
+            }
+
+            if (currentMillis - lastPidSampleMs >= PID_SAMPLE_TIME) {
+                lastPidSampleMs = currentMillis;
+                controlMotorPIDLoop();
+            }
         }
     }
-
-
-    if (disableRun == 0 || dirL == BACKWARD || dirR == BACKWARD) {
-        controlMotor(MOTOR_L, speedL, dirL);
-        controlMotor(MOTOR_R, speedR, dirR);
-    }
-
-    if ((millis() - previousMillis) >= CMD_TIME_OVER) {
-        joystickControl = false;
-    }
-
-    if (joystickControl == false) {
-        digitalWrite(LED_BUILTIN, LOW);
-        stopMotor();
-    }
-
-    delay(20);
 }

@@ -18,6 +18,13 @@ volatile int8_t g_lastRightDir = 0;
 // Constructer 2 motor
 MotorControl leftMotor(M1_PWM_PIN, M1_IN1_PIN, M1_IN2_PIN, false);
 MotorControl rightMotor(M2_PWM_PIN, M2_IN1_PIN, M2_IN2_PIN, false);
+
+MotorControl *ptrMotorArr[2] = { &leftMotor, &rightMotor };
+
+// Static function prototypes
+static void updateMotorSpeeds(void);
+
+/********************** Interrupt Functions ************************/
 // Interrupt encoder
 void EncoderLeftISR()
 {
@@ -54,20 +61,15 @@ void EncoderRightISR()
     }
 }
 
-// Add at the end of the file
-
-static MotorControl* motorL = nullptr;
-static MotorControl* motorR = nullptr;
-
+/**************************  Interface Functions  ***********************/
+/************************************************************************/
 void initMotor(void)
 {
-    // Initialize motors (adjust pins according to your config)
-    motorL = new MotorControl(M1_PWM_PIN, M1_IN1_PIN, M1_IN2_PIN, false);
-    motorR = new MotorControl(M2_PWM_PIN, M2_IN1_PIN, M2_IN2_PIN, false);
-
     // Configure PID parameters (adjust Kp, Ki, Kd values)
-    motorL->configPID(2.0, 0.5, 0.1);
-    motorR->configPID(2.0, 0.5, 0.1);
+    leftMotor.configPID(KP_DEFAULT_LEFT, KI_DEFAULT_LEFT, KD_DEFAULT_LEFT);
+    rightMotor.configPID(KP_DEFAULT_RIGHT, KI_DEFAULT_RIGHT, KD_DEFAULT_RIGHT);
+    leftMotor.setLimitsOutput(-PWM_MAX, PWM_MAX);
+    rightMotor.setLimitsOutput(-PWM_MAX, PWM_MAX);
 
     // Config encoder
     pinMode(M1_ENCA_PIN, INPUT_PULLUP);
@@ -79,34 +81,43 @@ void initMotor(void)
     attachInterrupt(digitalPinToInterrupt(M2_ENCA_PIN), EncoderRightISR, RISING);
 }
 
-void controlMotor(uint8_t name, uint8_t pwm, uint8_t dir)
+void stopMotor(void)
 {
-    if (name == MOTOR_L && motorL) {
-        motorL->setPwm(pwm, dir);
-    } else if (name == MOTOR_R && motorR) {
-        motorR->setPwm(pwm, dir);
-    }
+    leftMotor.stop();
+    rightMotor.stop();
 }
 
+void setPidControlEnabled(boolean enabled)
+{
+    leftMotor.enablePID(enabled);
+    rightMotor.enablePID(enabled);
+}
 
-void controlMotorPID(uint8_t name, double targetSpeed)
+void setPwmMotor(MotorNameT name, uint8_t pwm, uint8_t dir)
+{
+    ptrMotorArr[name]->setPwmDir(pwm, dir);
+}
+
+void setTargetSpeedMotor(MotorNameT name, double targetSpeed)
+{
+    ptrMotorArr[name]->setTargetSpeed(targetSpeed);
+}
+
+void updatePidParamsMotor(MotorNameT name, double Kp, double Ki, double Kd)
+{
+    ptrMotorArr[name]->configPID(Kp, Ki, Kd);
+}
+
+void controlMotorPIDLoop(void)
 {
     // Update motor speed from encoder readings
     updateMotorSpeeds();
-    computeMotorPID();
-
-    // To control motors with PID
-    controlMotorPID(MOTOR_L, 100); // Set target speed
-    controlMotorPID(MOTOR_R, 100);
-
-    if (name == MOTOR_L && motorL) {
-        motorL->setTargetSpeed(targetSpeed);
-        motorL->enablePID(true);
-    } else if (name == MOTOR_R && motorR) {
-        motorR->setTargetSpeed(targetSpeed);
-        motorR->enablePID(true);
-    }
+    leftMotor.computePID();
+    rightMotor.computePID();
 }
+
+/********************** Static functions **********************************/
+/**************************************************************************/
 
 // Tính tốc độ từ deltaCount trong dtSeconds; nếu deltaCount == 0 thì fallback sử dụng
 // khoảng thời gian giữa 2 xung (prevPulseMicros -> lastPulseMicros).
@@ -142,7 +153,7 @@ static double calcSpeedFromEncoder(long deltaCount, double dtSeconds,
 }
 
 // Cập nhật tốc độ động cơ bằng cách lấy delta count trong khoảng thời gian thực
-void updateMotorSpeeds(void)
+static void updateMotorSpeeds(void)
 {
     static long prevLeftCount = 0;
     static long prevRightCount = 0;
@@ -172,8 +183,8 @@ void updateMotorSpeeds(void)
     double leftSpeed = calcSpeedFromEncoder(deltaLeft, dtSeconds, prevLeftPulse, lastLeftPulse, lastLeftDir);
     double rightSpeed = calcSpeedFromEncoder(deltaRight, dtSeconds, prevRightPulse, lastRightPulse, lastRightDir);
 
-    if (motorL) motorL->updateMeasuredSpeed(leftSpeed);
-    if (motorR) motorR->updateMeasuredSpeed(rightSpeed);
+    leftMotor.updateMeasuredSpeed(leftSpeed);
+    rightMotor.updateMeasuredSpeed(rightSpeed);
 
     // Lưu mẫu cho lần tính tiếp theo
     prevLeftCount = curLeft;
@@ -181,25 +192,15 @@ void updateMotorSpeeds(void)
     prevTimeMicros = nowMicros;
 }
 
-void computeMotorPID(void)
-{
-    if (motorL) motorL->computePID();
-    if (motorR) motorR->computePID();
-}
-
-void stopMotor(void)
-{
-    if (motorL) motorL->stop();
-    if (motorR) motorR->stop();
-}
+/********************  Motor control class functions  ******************/
+/***********************************************************************/
 
 MotorControl::MotorControl(uint8_t ena, uint8_t in1, uint8_t in2, bool flip)
     : enaPin(ena), in1Pin(in1), in2Pin(in2), pinFlip(flip),
       currentPwm(0), currentDir(STOP), targetSpeed(0),
       measuredSpeed(0), pidEnabled(false)
 {
-    pidController = new PIDController(1.0, 0.0, 0.0); // Initial PID values
-    pidController->setOutputLimits(0, 255);
+    pidController = new PIDController(); // Initial PID values
 
     pinMode(enaPin, OUTPUT);
     pinMode(in1Pin, OUTPUT);
@@ -213,11 +214,63 @@ MotorControl::~MotorControl()
     }
 }
 
+void MotorControl::stop()
+{
+    setPwmDirect(0);
+    currentDir = STOP;
+}
+
+void MotorControl::setPwm(uint8_t pwmVal)
+{
+    // Constrain pwmVal
+    currentPwm = 0;
+    if (pwmVal > PWM_STOP_THRESHOLD) {
+        currentPwm = constrain(pwmVal, PWM_MIN, PWM_MAX);
+    }
+    setPwmDirect(currentPwm);
+}
+
+void MotorControl::setPwmDir(uint8_t pwmVal, uint8_t dir)
+{
+    setPwm(pwmVal);
+
+    // Set direction
+    if (dir == FORWARD) {
+        setDirDirect(false, true, pinFlip);
+    } else if (dir == BACKWARD) {
+        setDirDirect(true, false, pinFlip);
+    }
+    currentDir = dir;
+}
+
+uint8_t MotorControl::getPwm() const
+{
+    return currentPwm;
+}
+
+void MotorControl::setPwmDirect(uint8_t speed)
+{
+    currentPwm = speed;
+    analogWrite(enaPin, speed);
+}
+
+void MotorControl::setDirDirect(bool in1, bool in2, bool flip)
+{
+    if (flip) {
+        in1 = !in1;
+        in2 = !in2;
+    }
+    digitalWrite(in1Pin, in1);
+    digitalWrite(in2Pin, in2);
+}
+
+/*************************  PID control functions  *********************/
+
+// Set PID parameters
 void MotorControl::configPID(double Kp, double Ki, double Kd)
 {
     if (pidController) {
-        pidController = new PIDController(Kp, Ki, Kd);
-        pidController->setOutputLimits(0, 255);
+        pidController->setPidParams(Kp, Ki, Kd);
     }
 }
 
@@ -245,53 +298,20 @@ void MotorControl::updateMeasuredSpeed(double speed)
     }
 }
 
+void MotorControl::setLimitsOutput(double minVal, double maxVal)
+{
+    if (pidController) {
+        pidController->setOutputLimits(minVal, maxVal);
+    }
+}
+
 void MotorControl::computePID()
 {
     if (pidEnabled && pidController) {
         double pwmValue = pidController->compute();
-        setPwmDirect((uint8_t)pwmValue);
+        // Get PWM value and direction
+        uint8_t pwm = (uint8_t) fabs(pwmValue);
+        uint8_t dir = (pwmValue >= 0) ? FORWARD : BACKWARD;
+        setPwmDir(pwm, dir);
     }
-}
-
-void MotorControl::stop()
-{
-    setPwmDirect(0);
-    currentDir = STOP;
-}
-
-void MotorControl::setPwm(uint8_t pwmVal)
-{
-    setPwmDirect(pwmVal);
-}
-
-void MotorControl::setPwm(uint8_t pwmVal, uint8_t dir)
-{
-    setPwmDirect(pwmVal);
-    if (dir == FORWARD) {
-        setDirDirect(true, false, pinFlip);
-    } else if (dir == BACKWARD) {
-        setDirDirect(false, true, pinFlip);
-    }
-    currentDir = dir;
-}
-
-uint8_t MotorControl::getPwm() const
-{
-    return currentPwm;
-}
-
-void MotorControl::setPwmDirect(uint8_t speed)
-{
-    currentPwm = speed;
-    analogWrite(enaPin, speed);
-}
-
-void MotorControl::setDirDirect(bool in1, bool in2, bool flip)
-{
-    if (flip) {
-        in1 = !in1;
-        in2 = !in2;
-    }
-    digitalWrite(in1Pin, in1);
-    digitalWrite(in2Pin, in2);
 }

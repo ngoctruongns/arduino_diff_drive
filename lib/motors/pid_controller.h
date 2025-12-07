@@ -16,9 +16,10 @@ private:
     double outMin, outMax;
 
 public:
-    PIDController(double Kp, double Ki, double Kd);
+    PIDController();
     ~PIDController();
 
+    void setPidParams(double Kp, double Ki, double Kd);
     void setSetpoint(double target);
     void setInput(double value);
     double compute();

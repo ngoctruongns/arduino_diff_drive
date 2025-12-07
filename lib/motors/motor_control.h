@@ -5,18 +5,19 @@
 #include "pid_controller.h"
 
 // Motor define
-enum
+typedef enum
 {
     STOP = 0,
     FORWARD,
     BACKWARD
-};
+} MotorDirT;
 
-enum
+typedef enum
 {
     MOTOR_L = 0,
-    MOTOR_R
-};
+    MOTOR_R,
+    MOTOR_MAX
+} MotorNameT;
 
 // Class
 class MotorControl
@@ -41,17 +42,18 @@ public:
     ~MotorControl();
 
     void stop();
-    void setPwm(uint8_t pwmVal);
-    void setPwm(uint8_t pwmVal, uint8_t dir);
+    void setPwm(uint8_t pwmVal);    // Only set PWM, keep direction
+    void setPwmDir(uint8_t pwmVal, uint8_t dir);
+    uint8_t getPwm() const;
 
     // PID methods
     void configPID(double Kp, double Ki, double Kd);
+    void setLimitsOutput(double minVal, double maxVal);
     void enablePID(bool enable);
     void setTargetSpeed(double speed);
     void updateMeasuredSpeed(double speed);
     void computePID();
 
-    uint8_t getPwm() const;
     double getTargetSpeed() const { return targetSpeed; }
     double getMeasuredSpeed() const { return measuredSpeed; }
     boolean isPIDEnabled() const { return pidEnabled; }
@@ -61,13 +63,14 @@ private:
     void setDirDirect(bool in1, bool in2, bool flip);
 };
 
-/* Function prototype */
-
+/* Interface Functions Prototype */
 void initMotor(void);
-void controlMotor(uint8_t name, uint8_t pwm, uint8_t dir);
-void controlMotorPID(uint8_t name, double targetSpeed);
 void stopMotor(void);
-void updateMotorSpeeds(void);
-void computeMotorPID(void);
+void setPwmMotor(MotorNameT name, uint8_t pwm, uint8_t dir);
+
+void setPidControlEnabled(boolean enabled);
+void updatePidParamsMotor(MotorNameT name, double Kp, double Ki, double Kd);
+void setTargetSpeedMotor(MotorNameT name, double targetSpeed);
+void controlMotorPIDLoop(void);
 
 #endif // MOTOR_CONTROL_H

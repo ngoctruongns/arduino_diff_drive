@@ -37,5 +37,6 @@ void initJoystick(void);
 void loopJoytick(void);
 int  getJoySpeedL(void);
 int  getJoySpeedR(void);
+boolean getIsJoystickControl(void);
 
 #endif // UTILS_H

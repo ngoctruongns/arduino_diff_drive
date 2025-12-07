@@ -32,14 +32,15 @@ int error = 0;
 byte type = 0;
 byte vibrate = 0;
 
-int joySpeedL = 0;      // toc do dong co trai
-int joySpeedR = 0;      // toc do dong co phai
+static int joySpeedL = 0;      // toc do dong co trai
+static int joySpeedR = 0;      // toc do dong co phai
+static boolean isJoystickControl = false;
 
 // Hàm tính toán tốc độ động cơ
-static void calcSpeed(uint8_t xVal, uint8_t yVal) {
+static void calcSpeed(uint8_t leftY, uint8_t rightX) {
     // Chuẩn hóa giá trị joystick về khoảng [-1, 1]
-    float xNorm = (float)(JOYSTICK_MID_X - xVal) / JOYSTICK_MAX;
-    float yNorm = (float)(JOYSTICK_MID_Y - yVal) / JOYSTICK_MAX;
+    float xNorm = (float)(JOYSTICK_MID_Y - leftY) / JOYSTICK_MAX;
+    float yNorm = (float)(JOYSTICK_MID_X - rightX) / JOYSTICK_MAX;
 
     // Tính vận tốc thẳng và vận tốc góc
     float v = xNorm * PWM_MAX;              // Vận tốc thẳng
@@ -52,6 +53,13 @@ static void calcSpeed(uint8_t xVal, uint8_t yVal) {
     // Chuyển đổi vận tốc sang giá trị PWM (0-255)
     joySpeedL = (int)vL;
     joySpeedR = (int)vR;
+
+    // Set flag isJoystickControl if velocity is over threshold
+    if (abs(joySpeedL) > JOYSTICK_DEADZONE || abs(joySpeedR) > JOYSTICK_DEADZONE) {
+        isJoystickControl = true;
+    } else {
+        isJoystickControl = false;
+    }
 }
 
 void initJoystick()
@@ -125,6 +133,7 @@ void loopJoytick()
         if you don't enable the rumble, use ps2x.read_gamepad(); with no values
         You should call this at least once a second
      */
+    isJoystickControl = false;
     if (error == 1) // skip loop if no controller found
         return;
 
@@ -219,13 +228,10 @@ void loopJoytick()
         joySpeedL = joySpeedR = 0;
         if (ps2x.Button(PSB_L1) || ps2x.Button(PSB_R1))
         { // print stick values if either is TRUE
-            // Serial.print("Stick Values:");
+            // Serial.print("PSS_LY:");
             // Serial.print(ps2x.Analog(PSS_LY), DEC); // Left stick, Y axis. Other options: LX, RY, RX
             // Serial.print(",");
-            // Serial.println(ps2x.Analog(PSS_LX), DEC);
-            // Serial.print(",");
-            // Serial.print(ps2x.Analog(PSS_RY), DEC);
-            // Serial.print(",");
+            // Serial.print("PSS_RX:");
             // Serial.println(ps2x.Analog(PSS_RX), DEC);
 
             calcSpeed(ps2x.Analog(PSS_LY), ps2x.Analog(PSS_RX));
@@ -241,4 +247,9 @@ int getJoySpeedL()
 int getJoySpeedR()
 {
     return joySpeedR;
+}
+
+boolean getIsJoystickControl()
+{
+    return isJoystickControl;
 }

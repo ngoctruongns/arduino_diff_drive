@@ -55,13 +55,25 @@ typedef unsigned long UINT32;
 #define JOYSTICK_MID_Y  128       // Giá trị trung bình của joystick trục Y
 #define JOYSTICK_MAX    128.0     // Giá trị max độ lệch của joystick
 #define OMEGA_MAX       180       // Vận tốc góc tối đa (rad/s)
+#define JOYSTICK_DEADZONE  5      // Vùng chết của joystick quy ra PWM
 
 /* Define parameter */
 #define CMD_TIME_OVER       1000       // time to stop motor if not receive control cmd (ms)
-#define PWM_MAX             170        // Max PWM for all motor
+#define PWM_MAX             150        // Max PWM for all motor
 #define PWM_MIN             60         // Min PWM for motor can rotary
-#define PWM_STOP_THRESHOLD  10         // If pwm < threshold will be stop motor
+#define PWM_STOP_THRESHOLD  30         // If pwm < threshold will be stop motor
 #define PWM_STEP_NUM        10         // PWM step form MIN to MAX
 #define ENCODER_PPR         330        // 330 pulse per rev
+
+// Define PID parameters
+#define KP_DEFAULT_LEFT     1.0
+#define KI_DEFAULT_LEFT     0.0
+#define KD_DEFAULT_LEFT     0.0
+
+#define KP_DEFAULT_RIGHT    1.0
+#define KI_DEFAULT_RIGHT    0.0
+#define KD_DEFAULT_RIGHT    0.0
+#define PID_SAMPLE_TIME     50   // ms
+#define PID_CONTROL_TIMEOUT 100  // ms
 
 #endif  // _CONFIG_H_
